@@ -1,2 +1,2 @@
 ## TESTING
-Finally I start learning testing
+Testing using jest
