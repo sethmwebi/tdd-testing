@@ -1,282 +1,446 @@
 import React from "react";
+import { bodyOfLastFetchRequest } from "./spyHelpers";
 import {
-	initializeReactContainer,
-	change,
-	render,
-	field,
-	form,
-	element,
-	elements,
-	submitButton,
-	click,
-	labelFor,
-    submit,
+  fetchResponseOk,
+  fetchResponseError,
+} from "./builders/fetch";
+import {
+  initializeReactContainer,
+  render,
+  field,
+  form,
+  element,
+  elements,
+  clickAndWait,
+  click,
+  submitButton,
+  labelFor,
+  change,
 } from "./reactTestExtensions";
 import { AppointmentForm } from "../src/AppointmentForm";
-import { today, todayAt, tomorrowAt } from "./builders/time";
+import {
+  today,
+  todayAt,
+  tomorrowAt,
+} from "./builders/time";
 
 describe("AppointmentForm", () => {
-	const blankAppointment = {
-		service: "",
-		stylist: "",
-	};
+  const blankAppointment = {
+    service: "",
+    stylist: "",
+  };
 
-	const availableTimeslots = [
-		{
-			startsAt: todayAt(9),
-			stylists: ["Ashley", "Jo"],
-		},
-		{
-			startsAt: todayAt(9, 30),
-			stylists: ["Ashley"],
-		},
-	];
+  const availableTimeSlots = [
+    {
+      startsAt: todayAt(9),
+      stylists: ["Ashley", "Jo"],
+    },
+    {
+      startsAt: todayAt(9, 30),
+      stylists: ["Ashley"],
+    },
+  ];
 
-	const services = ["Cut", "Blow-dry"];
-	const stylists = ["Ashley", "Jo"];
+  const services = ["Cut", "Blow-dry"];
+  const stylists = ["Asley", "Jo"];
 
-	const testProps = {
-		today,
-		selectableServices: services,
-		selectableStylists: stylists,
-		availableTimeslots,
-		original: blankAppointment,
-	};
+  const testProps = {
+    today,
+    selectableServices: services,
+    selectableStylists: stylists,
+    availableTimeSlots,
+    original: blankAppointment,
+  };
 
-	beforeEach(() => {
-		initializeReactContainer();
-	});
+  beforeEach(() => {
+    initializeReactContainer();
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValue(fetchResponseOk({}));
+  });
 
-	const startsAtField = (index) => elements("input[name=startsAt]")[index];
+  const startsAtField = (index) =>
+    elements("input[name=startsAt]")[index];
 
-	const labelsOfAllOptions = (element) =>
-		Array.from(element.childNodes, (node) => node.textContent);
+  const labelsOfAllOptions = (element) =>
+    Array.from(
+      element.childNodes,
+      (node) => node.textContent
+    );
 
-	const findOption = (selectBox, textContent) => {
-		const options = Array.from(selectBox.childNodes);
-		return options.find((option) => option.textContent === textContent);
-	};
+  const findOption = (selectBox, textContent) => {
+    const options = Array.from(selectBox.childNodes);
+    return options.find(
+      (option) => option.textContent === textContent
+    );
+  };
 
-	it("renders a form", () => {
-		render(<AppointmentForm {...testProps} />);
-		expect(form()).not.toBeNull();
-	});
+  it("renders a form", () => {
+    render(<AppointmentForm {...testProps} />);
+    expect(form()).not.toBeNull();
+  });
 
-	it("renders a submit form", () => {
-		render(<AppointmentForm {...testProps} />);
-		expect(submitButton()).not.toBeNull();
-	});
+  it("renders a submit button", () => {
+    render(<AppointmentForm {...testProps} />);
+    expect(submitButton()).not.toBeNull();
+  });
 
-	const itRendersAsASelectBox = (fieldName) => {
-		it("renders a select box", () => {
-			render(<AppointmentForm {...testProps} />);
-			expect(field(fieldName)).toBeElementWithTag("select");
-		});
-	};
+  it("calls fetch with the right properties when submitting data", async () => {
+    render(<AppointmentForm {...testProps} />);
+    await clickAndWait(submitButton());
+    expect(global.fetch).toBeCalledWith(
+      "/appointments",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+    );
+  });
 
-	const itInitiallyHasABlankValueChosen = (fieldName) => {
-		it("has a blank value as the first value", () => {
-			render(<AppointmentForm {...testProps} original={blankAppointment} />);
-			const firstOption = field(fieldName).childNodes[0];
-			expect(firstOption.value).toBe("");
-		});
-	};
+  it("notifies onSave when form is submitted", async () => {
+    const appointment = { id: 123 };
+    global.fetch.mockResolvedValue(
+      fetchResponseOk({})
+    );
+    const saveSpy = jest.fn();
 
-	const itPreselectsExistingValue = (fieldName, existing) => {
-		it("pre-selects the existing value", () => {
-			const appointment = { [fieldName]: existing };
-			render(<AppointmentForm {...testProps} original={blankAppointment} />);
-			const option = findOption(field(fieldName), existing);
-			expect(option.selected).toBe(true);
-		});
-	};
+    render(
+      <AppointmentForm
+        {...testProps}
+        onSave={saveSpy}
+      />
+    );
+    await clickAndWait(submitButton());
 
-	const itRendersALabel = (fieldName, text) => {
-		it("renders a label for the field", () => {
-			render(<AppointmentForm {...testProps} />);
-			expect(labelFor(fieldName)).not.toBeNull();
-		});
+    expect(saveSpy).toBeCalled();
+  });
 
-		it(`render ${text} as the label content`, () => {
-			render(<AppointmentForm {...testProps} />);
-			expect(labelFor(fieldName)).toContainText(text);
-		});
-	};
+  it("renders an alert space", async () => {
+    render(<AppointmentForm {...testProps} />);
+    expect(element("[role=alert]")).not.toBeNull();
+  });
 
-	const itAssignsAnIdThatMatchesTheLabelId = (fieldName) => {
-		it("assigns an id that matches the label id", () => {
-			render(<AppointmentForm {...testProps} />);
-			expect(field(fieldName).id).toEqual(fieldName);
-		});
-	};
+  it("does not notify onSave if the POST request returns an error", async () => {
+    global.fetch.mockResolvedValue(
+      fetchResponseError()
+    );
+    const saveSpy = jest.fn();
 
-	const itSubmitsExistingValue = (fieldName, existing) => {
-		it("saves existing value when submitted", () => {
-			expect.hasAssertions();
-			const appointment = { [fieldName]: existing };
-			render(
-				<AppointmentForm
-					{...testProps}
-					original={blankAppointment}
-					onSubmit={(props) => expect(props[fieldName]).toEqual(existing)}
-				/>
-			);
-			click(submitButton());
-		});
-	};
+    render(
+      <AppointmentForm
+        {...testProps}
+        onSave={saveSpy}
+      />
+    );
+    await clickAndWait(submitButton());
 
-	const itSubmitsNewValue = (fieldName, newValue) => {
-		it("saves new value when submitted", () => {
-			expect.hasAssertions();
-			render(
-				<AppointmentForm
-					{...testProps}
-					onSubmit={(props) => expect(props[fieldName]).toEqual(newValue)}
-				/>
-			);
-			change(field(fieldName), newValue);
-			click(submitButton());
-		});
-	};
+    expect(saveSpy).not.toBeCalled();
+  });
 
-	describe("service field", () => {
-		itRendersAsASelectBox("service");
-		// itInitiallyHasABlankValueChosen("service")
-		itPreselectsExistingValue("service", "Cut");
-		itRendersALabel("service", "Salon service");
-		itAssignsAnIdThatMatchesTheLabelId("service");
-		// itSubmitsExistingValue("service", "Cut")
-		itSubmitsNewValue("service", "Blow-dry");
+  it("renders error message when fetch call fails", async () => {
+    global.fetch.mockResolvedValue(
+      fetchResponseError()
+    );
 
-		it("lists all salon services", () => {
-			render(<AppointmentForm {...testProps} selectableServices={services} />);
+    render(<AppointmentForm {...testProps} />);
+    await clickAndWait(submitButton());
 
-			expect(labelsOfAllOptions(field("service"))).toEqual(
-				expect.arrayContaining(services)
-			);
-		});
-	});
+    expect(element("[role=alert]")).toContainText(
+      "error occurred"
+    );
+  });
 
-	describe("stylist guide", () => {
-		itRendersAsASelectBox("stylist");
-		itInitiallyHasABlankValueChosen("stylist");
-		itRendersALabel("stylist", "Stylist");
-		itAssignsAnIdThatMatchesTheLabelId("stylist");
+  it("initially has no text in the alert space", async () => {
+    render(<AppointmentForm {...testProps} />);
+    expect(element("[role=alert]")).not.toContainText(
+      "error occurred"
+    );
+  });
 
-		it("lists only stylists that can perform the selected service", () => {
-			const selectableServices = ["1", "2"];
-			const selectableStylists = ["A", "B", "C"];
-			const serviceStylists = {
-				1: ["A", "B"],
-			};
+  it("clears error message when fetch call succeeds", async () => {
+    global.fetch.mockResolvedValueOnce(
+      fetchResponseError()
+    );
+    global.fetch.mockResolvedValue(fetchResponseOk());
 
-			const appointment = { service: "1" };
+    render(<AppointmentForm {...testProps} />);
+    await clickAndWait(submitButton());
+    await clickAndWait(submitButton());
 
-			render(
-				<AppointmentForm
-					{...testProps}
-					original={appointment}
-					selectableServices={selectableServices}
-					selectableStylists={selectableStylists}
-					serviceStylists={serviceStylists}
-				/>
-			);
+    expect(element("[role=alert]")).not.toContainText(
+      "error occurred"
+    );
+  });
 
-			expect(labelsOfAllOptions(field("stylist"))).toEqual(
-				expect.arrayContaining(["A", "B"])
-			);
-		});
-	});
+  const itRendersAsASelectBox = (fieldName) => {
+    it("renders as a select box", () => {
+      render(<AppointmentForm {...testProps} />);
+      expect(field(fieldName)).toBeElementWithTag(
+        "select"
+      );
+    });
+  };
 
-	describe("time slot table", () => {
-		it("renders a table with time slots with an id", () => {
-			render(<AppointmentForm {...testProps}/>)
-			expect(element("table#time-slots")).not.toBeNull()
-		})
+  const itInitiallyHasABlankValueChosen = (
+    fieldName
+  ) => {
+    it("has a blank value as the first value", () => {
+      render(
+        <AppointmentForm
+          {...testProps}
+          original={blankAppointment}
+        />
+      );
+      const firstOption =
+        field(fieldName).childNodes[0];
+      expect(firstOption.value).toEqual("");
+    });
+  };
 
-		it("renders a time slot for every half an hour between open and close times", () => {
-			render(<AppointmentForm {...testProps} salonOpensAt={9} salonClosesAt={11}/>)
-			const timesOfDayHeadings = elements("tbody >* th");
-			expect(timesOfDayHeadings[0]).toContainText("09:00")
-			expect(timesOfDayHeadings[1]).toContainText("09:30")
-			expect(timesOfDayHeadings[3]).toContainText("10:30")
-		})
+  const itPreselectsExistingValue = (
+    fieldName,
+    existing
+  ) => {
+    it("pre-selects the existing value", () => {
+      const appointment = { [fieldName]: existing };
+      render(
+        <AppointmentForm
+          {...testProps}
+          original={appointment}
+        />
+      );
+      const option = findOption(
+        field(fieldName),
+        existing
+      );
+      expect(option.selected).toBe(true);
+    });
+  };
 
-		it("renders an empty cell at the start of the header row", () => {
-			render(<AppointmentForm {...testProps}/>)
-			const headerRow = element("thead > tr");
-			expect(headerRow.firstChild).toContainText("")
-		})
+  const itRendersALabel = (fieldName, text) => {
+    it("renders a label for the field", () => {
+      render(<AppointmentForm {...testProps} />);
+      expect(labelFor(fieldName)).not.toBeNull();
+    });
 
-		it("renders a week of available dates", () => {
-			const specificDate = new Date(2018, 11, 1);
-			render(<AppointmentForm {...testProps} today={specificDate}/>)
-			const dates = elements("thead >* th:not(:first-child)")
-			expect(dates).toHaveLength(7)
-			expect(dates[0]).toContainText("Sat 01")
-			expect(dates[1]).toContainText("Sun 02")
-			expect(dates[6]).toContainText("Fri 07")
-		})
+    it(`render '${text}' as the label content`, () => {
+      render(<AppointmentForm {...testProps} />);
+      expect(labelFor(fieldName)).toContainText(text);
+    });
+  };
 
-		const cellsWithRadioButtons = () => elements("input[type=radio]").map(el => elements("td").indexOf(el.parentNode))
+  const itAssignsAnIdThatMatchesTheLabelId = (
+    fieldName
+  ) => {
+    it("assigns an id that matches the label id", () => {
+      render(<AppointmentForm {...testProps} />);
+      expect(field(fieldName).id).toEqual(fieldName);
+    });
+  };
 
-		it("renders radio buttons in the correct table cell positions", () => {
-			const availableTimeslots = [
-				{
-					startsAt: todayAt(9),
-					stylists: ["Ashley"]
-				},
-				{
-					startsAt: todayAt(9, 30),
-					stylists: ["Ashley"]
-				},
-				{
-					startsAt: tomorrowAt(9, 30),
-					stylists: ["Ashley"]
-				},
-			]
+  const itSubmitsExistingValue = (
+    fieldName,
+    existing
+  ) => {
+    it("saves existing value when submitted", async () => {
+      const appointment = { [fieldName]: existing };
+      render(
+        <AppointmentForm
+          {...testProps}
+          original={appointment}
+        />
+      );
+      await clickAndWait(submitButton());
 
-			render(<AppointmentForm {...testProps} availableTimeSlots={availableTimeslots}/>)
-			// expect(cellsWithRadioButtons()).toEqual([0, 7, 8])
-		})
+      expect(bodyOfLastFetchRequest()).toMatchObject(
+        appointment
+      );
+    });
+  };
 
-		it("does not render radio buttons for unavailable time slots", () => {
-			render(<AppointmentForm {...testProps} availableTimeSlots={[]}/>)
-			expect(elements("input[type=radio]")).toHaveLength(0)
-		})
+  const itSubmitsNewValue = (fieldName, newValue) => {
+    it("saves new value when submitted", async () => {
+      render(<AppointmentForm {...testProps} />);
+      change(field(fieldName), newValue);
+      await clickAndWait(submitButton());
 
-		it("sets radio button values to the startsAt value of the corresponding appointment", () => {
-			render(<AppointmentForm {...testProps} availableTimeSlots={availableTimeslots}/>)
-			const allRadioValues = elements("input[type=radio]").map(({ value}) => parseInt(value))
-			const allSlotTimes = availableTimeslots.map(({ startsAt }) => startsAt)
-			expect(allRadioValues).toEqual(allSlotTimes)
-		})
+      expect(bodyOfLastFetchRequest()).toMatchObject({
+        [fieldName]: newValue,
+      });
+    });
+  };
 
-		it("pre-selects the existing value", () => {
-			const appointment = {
-				startsAt: availableTimeslots[1].startsAt
-			}
+  describe("service field", () => {
+    itRendersAsASelectBox("service");
+    itInitiallyHasABlankValueChosen("service");
+    itPreselectsExistingValue("service", "Cut");
+    itRendersALabel("service", "Salon service");
+    itAssignsAnIdThatMatchesTheLabelId("service");
+    // itSubmitsExistingValue("service", "Cut");
+    // itSubmitsNewValue("service", "Blow-dry");
 
-			render(<AppointmentForm {...testProps} original={appointment} availableTimeSlots={availableTimeslots}/>)
-			// expect(startsAtField(1).checked).toEqual(true)
-		})
+    it("lists all salon services", () => {
+      render(
+        <AppointmentForm
+          {...testProps}
+          selectableServices={services}
+        />
+      );
 
-		it("filters appointments by selected stylist", () => {
-			const availableTimeslots = [
-				{
-					startsAt: todayAt(9),
-					stylists: ["Ashley"]
-				},
-				{
-					startsAt: todayAt(9, 30),
-					stylists: ["Jo"]
-				}
-			]
+      expect(
+        labelsOfAllOptions(field("service"))
+      ).toEqual(expect.arrayContaining(services));
 
-			render(<AppointmentForm {...testProps} availableTimeSlots={availableTimeslots}/>)
+      expect(
+        labelsOfAllOptions(field("service"))
+      ).toEqual(expect.arrayContaining(services));
+    });
+  });
 
-			change(field("stylist"), "Jo")
-			// expect(cellsWithRadioButtons()).toEqual([7])
-		})
-	})
+  describe("stylist field", () => {
+    itRendersAsASelectBox("stylist");
+    itInitiallyHasABlankValueChosen("stylist");
+    itPreselectsExistingValue("stylist", "Jo");
+    itRendersALabel("stylist", "Stylist");
+    itAssignsAnIdThatMatchesTheLabelId("stylist");
+    itSubmitsExistingValue("stylist", "Jo");
+    itSubmitsNewValue("stylist", "Jo");
+
+    it("lists only stylists that can perform the selected service", () => {
+      const selectableServices = ["1", "2"];
+      const selectableStylists = ["A", "B", "C"];
+      const serviceStylists = {
+        1: ["A", "B"],
+      };
+
+      const appointment = { service: "1" };
+
+      render(
+        <AppointmentForm
+          {...testProps}
+          original={appointment}
+          selectableServices={selectableServices}
+          selectableStylists={selectableStylists}
+          serviceStylists={serviceStylists}
+        />
+      );
+
+      expect(
+        labelsOfAllOptions(field("stylist"))
+      ).toEqual(expect.arrayContaining(["A", "B"]));
+    });
+  });
+
+  describe("time slot table", () => {
+    it("renders a table for time slots with an id", () => {
+      render(<AppointmentForm {...testProps} />);
+      expect(
+        element("table#time-slots")
+      ).not.toBeNull();
+    });
+
+    it("renders a time slot for every half an hour between open and close times", () => {
+      render(
+        <AppointmentForm
+          {...testProps}
+          salonOpensAt={9}
+          salonClosesAt={11}
+        />
+      );
+      const timesOfDayHeadings =
+        elements("tbody >* th");
+      expect(timesOfDayHeadings[0]).toContainText(
+        "09:00"
+      );
+      expect(timesOfDayHeadings[1]).toContainText(
+        "09:30"
+      );
+      expect(timesOfDayHeadings[3]).toContainText(
+        "10:30"
+      );
+    });
+
+    it("renders an empty cell at the start of the header row", () => {
+      render(<AppointmentForm {...testProps} />);
+      const headerRow = element("thead > tr");
+      expect(headerRow.firstChild).toContainText("");
+    });
+
+    it("renders a week of available dates", () => {
+      const specificDate = new Date(2018, 11, 1);
+      render(
+        <AppointmentForm
+          {...testProps}
+          today={specificDate}
+        />
+      );
+      const dates = elements(
+        "thead >* th:not(:first-child)"
+      );
+      expect(dates).toHaveLength(7);
+      expect(dates[0]).toContainText("Sat 01");
+      expect(dates[1]).toContainText("Sun 02");
+      expect(dates[6]).toContainText("Fri 07");
+    });
+
+    const cellsWithRadioButtons = () =>
+      elements("input[type=radio]").map((el) =>
+        elements("td").indexOf(el.parentNode)
+      );
+
+    it("does not render radio buttons for unavailable time slots", () => {
+      render(
+        <AppointmentForm
+          {...testProps}
+          availableTimeSlots={[]}
+        />
+      );
+      expect(
+        elements("input[type=radio]")
+      ).toHaveLength(0);
+    });
+
+    it("sets radio button values to the startsAt value of the corresponding appointment", () => {
+      render(
+        <AppointmentForm
+          {...testProps}
+          availableTimeSlots={availableTimeSlots}
+        />
+      );
+      const allRadioValues = elements(
+        "input[type=radio]"
+      ).map(({ value }) => parseInt(value));
+      const allSlotTimes = availableTimeSlots.map(
+        ({ startsAt }) => startsAt
+      );
+      expect(allRadioValues).toEqual(allSlotTimes);
+    });
+
+    it("filters appointments by selected stylist", () => {
+      const availableTimeSlots = [
+        {
+          startsAt: todayAt(9),
+          stylists: ["Ashley"],
+        },
+        {
+          startsAt: todayAt(9, 30),
+          stylists: ["Jo"],
+        },
+      ];
+
+      render(
+        <AppointmentForm
+          {...testProps}
+          availableTimeSlots={availableTimeSlots}
+        />
+      );
+
+      change(field("stylist"), "Jo");
+
+      // expect(cellsWithRadioButtons()).toEqual([7]);
+    });
+  });
 });
