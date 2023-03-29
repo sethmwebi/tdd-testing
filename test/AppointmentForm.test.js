@@ -23,13 +23,9 @@ import {
   todayAt,
   tomorrowAt,
 } from "./builders/time";
+import { blankAppointment } from "./builders/appointment";
 
 describe("AppointmentForm", () => {
-  const blankAppointment = {
-    service: "",
-    stylist: "",
-  };
-
   const availableTimeSlots = [
     {
       startsAt: todayAt(9),
@@ -173,6 +169,24 @@ describe("AppointmentForm", () => {
     expect(element("[role=alert]")).not.toContainText(
       "error occurred"
     );
+  });
+
+  it("passes the customer id to fetch when submitting", async () => {
+    const appointment = {
+      ...blankAppointment,
+      customer: "123",
+    };
+
+    render(
+      <AppointmentForm
+        {...testProps}
+        original={appointment}
+      />
+    );
+    await clickAndWait(submitButton());
+    expect(bodyOfLastFetchRequest()).toMatchObject({
+      customer: "123",
+    });
   });
 
   const itRendersAsASelectBox = (fieldName) => {

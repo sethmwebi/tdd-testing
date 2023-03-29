@@ -14,15 +14,9 @@ import {
 import { CustomerForm } from "../src/CustomerForm";
 import { bodyOfLastFetchRequest } from "./spyHelpers";
 import { fetchResponseOk, fetchResponseError } from "./builders/fetch";
+import { blankCustomer } from "./builders/customers";
 
 describe("CustomerForm", () => {
-	const blankCustomer = {
-		firstName: "",
-		lastName: "",
-		phoneNumber: "",
-	};
-	
-
 	beforeEach(() => {
 		initializeReactContainer();
 		jest.spyOn(global, "fetch").mockResolvedValue(fetchResponseOk({}))

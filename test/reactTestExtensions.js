@@ -81,3 +81,8 @@ export const change = (target, value) => {
 
 export const labelFor = (formElement) =>
 	element(`label[for=${formElement}]`);
+
+export const propsOf = (mockComponent) => {
+	const lastCall = mockComponent.mock.calls[mockComponent.mock.calls.length - 1]
+	return lastCall[0]
+}
