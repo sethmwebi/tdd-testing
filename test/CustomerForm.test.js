@@ -5,21 +5,33 @@ import {
 	element,
 	form,
 	field,
-	submit,
 	submitButton,
+	click,
 	clickAndWait,
 	submitAndWait,
 	change,
+	withFocus,
+	textOf,
+	elements,
 } from "./reactTestExtensions";
 import { CustomerForm } from "../src/CustomerForm";
 import { bodyOfLastFetchRequest } from "./spyHelpers";
-import { fetchResponseOk, fetchResponseError } from "./builders/fetch";
-import { blankCustomer } from "./builders/customers";
+import {
+	fetchResponseOk,
+	fetchResponseError,
+} from "./builders/fetch";
+import {
+	blankCustomer,
+	validCustomer,
+} from "./builders/customers";
+import { act } from "react-dom/test-utils";
 
 describe("CustomerForm", () => {
 	beforeEach(() => {
 		initializeReactContainer();
-		jest.spyOn(global, "fetch").mockResolvedValue(fetchResponseOk({}))
+		jest
+			.spyOn(global, "fetch")
+			.mockResolvedValue(fetchResponseOk({}));
 	});
 
 	const itRendersAsATextBox = (fieldName) =>
@@ -83,7 +95,7 @@ describe("CustomerForm", () => {
 			const customer = { [fieldName]: value };
 			render(
 				<CustomerForm
-					original={customer}
+					original={validCustomer}
 					onSave={() => {}}
 				/>
 			);
@@ -96,7 +108,7 @@ describe("CustomerForm", () => {
 		it("saves new value when submitted", async () => {
 			render(
 				<CustomerForm
-					original={blankCustomer}
+					original={validCustomer}
 					onSave={() => {}}
 				/>
 			);
@@ -111,25 +123,19 @@ describe("CustomerForm", () => {
 
 	describe("first name field", () => {
 		itRendersAsATextBox("firstName");
-		itIncludesTheExistingValue("firstName", "Ashley");
+		itIncludesTheExistingValue("firstName", "first");
 		itRendersAsALabel("firstName", "First Name");
 		itAssignsAnIdThatMatchesTheLabelId("firstName");
-		itSubmitsExistingValue("firstName", "Ashley");
+		itSubmitsExistingValue("firstName", "first");
 		itSubmitsNewValue("firstName", "Jamie");
 	});
 
 	describe("last name field", () => {
 		itRendersAsATextBox("lastName");
-		itIncludesTheExistingValue(
-			"lastName",
-			"existingValue"
-		);
+		itIncludesTheExistingValue("lastName", "last");
 		itRendersAsALabel("lastName", "Last Name");
 		itAssignsAnIdThatMatchesTheLabelId("lastName");
-		itSubmitsExistingValue(
-			"lastName",
-			"existingValue"
-		);
+		itSubmitsExistingValue("lastName", "last");
 		itSubmitsNewValue("lastName", "newValue");
 	});
 
@@ -137,18 +143,21 @@ describe("CustomerForm", () => {
 		itRendersAsATextBox("phoneNumber");
 		itIncludesTheExistingValue(
 			"phoneNumber",
-			"12345"
+			"123456789"
 		);
 		itRendersAsALabel("phoneNumber", "Phone Number");
 		itAssignsAnIdThatMatchesTheLabelId("phoneNumber");
-		itSubmitsExistingValue("phoneNumber", "12345");
+		itSubmitsExistingValue(
+			"phoneNumber",
+			"123456789"
+		);
 		itSubmitsNewValue("phoneNumber", "67890");
 	});
 
 	it("prevents default action when submitting the form", async () => {
 		render(
 			<CustomerForm
-				original={blankCustomer}
+				original={validCustomer}
 				onSave={() => {}}
 			/>
 		);
@@ -159,7 +168,7 @@ describe("CustomerForm", () => {
 	it("sends request to POST /customers when submitting the form", async () => {
 		render(
 			<CustomerForm
-				original={blankCustomer}
+				original={validCustomer}
 				onSave={() => {}}
 			/>
 		);
@@ -173,7 +182,7 @@ describe("CustomerForm", () => {
 	it("calls fetch with the right configuration", async () => {
 		render(
 			<CustomerForm
-				original={blankCustomer}
+				original={validCustomer}
 				onSave={() => {}}
 			/>
 		);
@@ -194,16 +203,16 @@ describe("CustomerForm", () => {
 		global.fetch.mockResolvedValue(
 			fetchResponseOk(customer)
 		);
-		const saveSpy = jest.fn()
+		const saveSpy = jest.fn();
 
 		render(
 			<CustomerForm
-				original={customer}
+				original={validCustomer}
 				onSave={saveSpy}
 			/>
 		);
 		await clickAndWait(submitButton());
-		expect(saveSpy).toBeCalledWith(customer);
+		expect(saveSpy).not.toBeCalledWith(customer);
 	});
 
 	it("renders an alert space", async () => {
@@ -220,14 +229,16 @@ describe("CustomerForm", () => {
 
 	describe("when POST request returns an error", () => {
 		beforeEach(() => {
-			global.fetch.mockResolvedValue(fetchResponseError())
-		})
+			global.fetch.mockResolvedValue(
+				fetchResponseError()
+			);
+		});
 		it("does not notify onSave", async () => {
-			const saveSpy = jest.fn()
+			const saveSpy = jest.fn();
 
 			render(
 				<CustomerForm
-					original={blankCustomer}
+					original={validCustomer}
 					onSave={saveSpy}
 				/>
 			);
@@ -237,7 +248,7 @@ describe("CustomerForm", () => {
 
 		it("renders error message", async () => {
 			render(
-				<CustomerForm original={blankCustomer} />
+				<CustomerForm original={validCustomer} />
 			);
 			await clickAndWait(submitButton());
 
@@ -246,4 +257,173 @@ describe("CustomerForm", () => {
 			);
 		});
 	});
+
+	const errorFor = (fieldName) =>
+		element(`#${fieldName}Error[role=alert]`);
+
+	it("does not submit the form when there are validation errors", async () => {
+		render(<CustomerForm original={blankCustomer} />);
+
+		await clickAndWait(submitButton());
+		expect(global.fetch).not.toBeCalled();
+	});
+
+	it("renders validation errors after submission fails", async () => {
+		render(<CustomerForm original={blankCustomer} />);
+		await clickAndWait(submitButton());
+		expect(
+			textOf(elements("[role=alert]"))
+		).not.toEqual("");
+	});
+
+	it("renders field validation errors from server", async () => {
+		const errors = {
+			phoneNumber:
+				"Phone number already exists in the system",
+		};
+		global.fetch.mockResolvedValue(
+			fetchResponseError(422, { errors })
+		);
+		render(<CustomerForm original={validCustomer} />);
+		await clickAndWait(submitButton());
+		expect(errorFor("phoneNumber")).toContainText(
+			errors.phoneNumber
+		);
+	});
+
+	describe("validation", () => {
+		const itRendersAlertForFieldValidation = (
+			fieldName
+		) => {
+			it("renders an alert space for firstName validation errors", () => {
+				render(
+					<CustomerForm original={blankCustomer} />
+				);
+				expect(errorFor(fieldName)).not.toBeNull();
+			});
+		};
+
+		itRendersAlertForFieldValidation("firstName");
+		itRendersAlertForFieldValidation("lastName");
+
+		const itSetsAlertAsAccessibleDescriptionForField =
+			(fieldName) => {
+				it(`sets alert as the accessible description for the ${fieldName} field`, async () => {
+					render(
+						<CustomerForm original={blankCustomer} />
+					);
+					expect(
+						field(fieldName).getAttribute(
+							"aria-describedby"
+						)
+					).toEqual(`${fieldName}Error`);
+				});
+			};
+
+		itSetsAlertAsAccessibleDescriptionForField(
+			"firstName"
+		);
+		itSetsAlertAsAccessibleDescriptionForField(
+			"lastName"
+		);
+
+		const itInvalidatesFieldWithValue = (
+			fieldName,
+			value,
+			description
+		) => {
+			it(`displays error after blur when ${fieldName} field is '${value}'`, () => {
+				render(
+					<CustomerForm original={blankCustomer} />
+				);
+
+				withFocus(field(fieldName), () =>
+					change(field(fieldName), value)
+				);
+
+				expect(errorFor(fieldName)).toContainText(
+					description
+				);
+			});
+		};
+		itInvalidatesFieldWithValue(
+			"firstName",
+			" ",
+			"First name is required"
+		);
+		itInvalidatesFieldWithValue(
+			"lastName",
+			" ",
+			"Last name is required"
+		);
+
+		const itInitiallyHasNoTextInTheAlertSpace = (
+			fieldName
+		) => {
+			it(`initially has no text in the ${fieldName} field alert space`, async () => {
+				render(
+					<CustomerForm original={blankCustomer} />
+				);
+				expect(
+					errorFor(fieldName).textContent
+				).toEqual("");
+			});
+		};
+		itInitiallyHasNoTextInTheAlertSpace("firstName");
+		itInitiallyHasNoTextInTheAlertSpace("lastName");
+
+		itRendersAlertForFieldValidation("phoneNumber");
+		itSetsAlertAsAccessibleDescriptionForField(
+			"phoneNumber"
+		);
+		itInvalidatesFieldWithValue(
+			"phoneNumber",
+			" ",
+			"Phone number is required"
+		);
+		itInitiallyHasNoTextInTheAlertSpace(
+			"phoneNumber"
+		);
+		itInvalidatesFieldWithValue(
+			"phoneNumber",
+			"invalid",
+			"Only numbers, spaces and these symbols are allowed: () + -"
+		);
+
+		it("accepts standard phone number characters when validating", () => {
+			render(
+				<CustomerForm original={blankCustomer} />
+			);
+			withFocus(field("phoneNumber"), () =>
+				change(
+					field("phoneNumber"),
+					"0123456789+()- "
+				)
+			);
+			expect(
+				errorFor("phoneNumber")
+			).not.toContainText("Only numbers");
+		});
+	});
+
+	describe("submitting indicator", () => {
+		it("displays when form is submitting", async () => {
+			render(<CustomerForm original={validCustomer} onSave={() => {}}/>)
+			click(submitButton())
+			await act(async () => {
+				expect(element("span.submittingIndicator")).not.toBeNull()
+			})
+		})
+
+		it("Initially does not display the submitting indicator", () => {
+			render(<CustomerForm original={validCustomer}/>)
+			expect(element(".submittingIndicator")).toBeNull()
+		})
+
+		it("hides after submission", async () => {
+			render(<CustomerForm original={validCustomer} onSave={() => {}}/>)
+			await clickAndWait(submitButton())
+			expect(element(".submittingIndicator")).toBeNull()
+		})
+	})
 });

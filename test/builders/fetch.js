@@ -1,6 +1,3 @@
-export const fetchResponseOk = body => Promise.resolve({
-	ok: true,
-	json: () => Promise.resolve(body)
-})
+export const fetchResponseOk = (status = 500, body = {}) => ({ok: false, status, json: () => Promise.resolve(body)})
 
-export const fetchResponseError = () => Promise.resolve({ok: false})
+export const fetchResponseError = (status = 500, body = {}) => ({ok: false, status, json: () => Promise.resolve(body)})

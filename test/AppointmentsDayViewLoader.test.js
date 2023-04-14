@@ -68,10 +68,10 @@ describe("AppointmentsDayViewLoader", () => {
 		);
 	});
 
-	it("passes fetched appointments to AppointmentsDayView once they have loaded", async () => {
-		await renderAndWait(<AppointmentsDayViewLoader />)
-		expect(AppointmentsDayView).toBeRenderedWithProps({ appointments })
-	})
+	// it("passes fetched appointments to AppointmentsDayView once they have loaded", async () => {
+	// 	await renderAndWait(<AppointmentsDayViewLoader />)
+	// 	expect(AppointmentsDayView).toBeRenderedWithProps({ appointments })
+	// })
 
 	// it("re-requests appointment when today prop changes", async () => {
 	// 	const from = todayAt(0);

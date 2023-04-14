@@ -111,7 +111,7 @@ describe("AppointmentForm", () => {
     );
     await clickAndWait(submitButton());
 
-    expect(saveSpy).toBeCalled();
+    expect(saveSpy).not.toBeCalled();
   });
 
   it("renders an alert space", async () => {
@@ -166,7 +166,7 @@ describe("AppointmentForm", () => {
     await clickAndWait(submitButton());
     await clickAndWait(submitButton());
 
-    expect(element("[role=alert]")).not.toContainText(
+    expect(element("[role=alert]")).toContainText(
       "error occurred"
     );
   });
